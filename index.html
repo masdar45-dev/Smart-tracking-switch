@@ -1,0 +1,675 @@
+smart-hand-gesture-blynk:Smart Hand Gesture Blynk 8-Switch Controller:index.html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Hand Gesture Blynk Controller (8 Saklar)</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- MediaPipe Hands & Camera Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    /* Custom Scrollbar for Logs */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(31, 41, 55, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(75, 85, 99, 0.5);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.5);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3.5 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-indigo-600 rounded-lg text-white">
+          <i data-lucide="hand"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold bg-gradient-to-r bg-clip-text text-transparent from-indigo-400 to-purple-400">GestureLink IoT 8-Switch</h1>
+          <p class="text-xs text-slate-400">Kendali 8 Saklar Blynk Menggunakan Isyarat Dua Tangan (1-8 Jari)</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Multi-Hand Tracking Aktif
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- Kolom Kiri: Kamera & Deteksi -->
+    <div class="lg:col-span-6 flex flex-col gap-4">
+      
+      <!-- Video Container -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden relative shadow-2xl aspect-video flex items-center justify-center">
+        <video id="webcam" autoplay playsinline class="hidden" muted></video>
+        <canvas id="output_canvas" class="w-full h-full object-cover transform -scale-x-100"></canvas>
+        
+        <!-- UI Overlay Loading -->
+        <div id="loading-overlay" class="absolute inset-0 bg-slate-950/85 flex flex-col items-center justify-center gap-3 transition-opacity duration-500 z-10">
+          <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-sm font-medium text-slate-300">Mengunduh AI Model Deteksi Tangan...</p>
+        </div>
+
+        <!-- UI Status Deteksi Overlay -->
+        <div class="absolute bottom-4 left-4 bg-slate-950/90 backdrop-blur-md px-4 py-3 rounded-xl border border-slate-800/85 flex items-center gap-4 max-w-xs sm:max-w-sm">
+          <div class="w-12 h-12 rounded-lg bg-indigo-950 border border-indigo-500/30 flex items-center justify-center">
+            <span id="detected-number" class="text-2xl font-bold text-indigo-400">-</span>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Jari Terbuka</div>
+            <div id="detected-status" class="text-xs font-bold text-slate-200">Menunggu tangan terdeteksi...</div>
+          </div>
+        </div>
+
+        <!-- Progress Hold Bar (Sistem Hold to Trigger) -->
+        <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-800">
+          <div id="trigger-progress" class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-75 w-0"></div>
+        </div>
+      </div>
+
+      <!-- Panduan Cara Penggunaan -->
+      <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex gap-4 items-start">
+        <div class="p-2 bg-amber-500/10 text-amber-400 rounded-lg shrink-0 mt-0.5">
+          <i data-lucide="info" class="w-5 h-5"></i>
+        </div>
+        <div class="text-xs space-y-1.5">
+          <p class="font-bold text-slate-200 text-sm">Petunjuk Penggunaan Isyarat 8 Jari:</p>
+          <ul class="list-disc list-inside text-slate-400 space-y-1">
+            <li>Tunjukkan jumlah jari <span class="text-indigo-400 font-semibold">1 sampai 8</span> menggunakan satu atau kedua tangan Anda.</li>
+            <li>Tahan posisi tangan Anda selama <span class="text-indigo-400 font-semibold">1,5 detik</span> hingga garis kemajuan penuh.</li>
+            <li>Sistem akan otomatis mengubah status (*toggle*) saklar Blynk terkait (contoh: 7 Jari = V7).</li>
+            <li>Ada waktu jeda (*cooldown*) 2.5 detik setelah setiap pemicuan untuk menghindari ketidaksengajaan.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Log Terminal Realtime -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col h-[200px]">
+        <div class="flex justify-between items-center mb-2 shrink-0">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="terminal" class="w-4 h-4 text-slate-500"></i> Log Aktivitas API
+          </span>
+          <button onclick="clearLogs()" class="text-[10px] text-slate-500 hover:text-slate-300 font-semibold">Bersihkan</button>
+        </div>
+        <div id="log-terminal" class="flex-grow bg-slate-950 rounded-xl p-3 font-mono text-[11px] overflow-y-auto border border-slate-800 text-slate-300 space-y-1">
+          <div class="text-slate-500">[Sistem] Menunggu input isyarat tangan...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Kolom Kanan: Pengaturan Blynk & Status Saklar -->
+    <div class="lg:col-span-6 flex flex-col gap-6">
+      
+      <!-- Panel Kredensial Blynk -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i>
+            <h2 class="text-sm font-bold text-slate-100">Koneksi Blynk REST API</h2>
+          </div>
+          <div id="demo-badge" class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+            Demo Mode Aktif
+          </div>
+        </div>
+        
+        <div class="space-y-4">
+          <!-- Auth Token Input Field -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Blynk Auth Token</label>
+            <div class="relative">
+              <input id="blynk-token" type="password" placeholder="Masukkan Auth Token Blynk Anda disini..." 
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 pl-10 text-xs focus:outline-none focus:border-indigo-500 transition text-slate-200">
+              <i data-lucide="key" class="w-4 h-4 text-slate-500 absolute left-3 top-3.5"></i>
+              <button onclick="toggleTokenVisibility()" class="absolute right-3 top-3.5 text-slate-500 hover:text-slate-300">
+                <i id="toggle-eye" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Server Region & Mode Selectors -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Server Region</label>
+              <select id="blynk-region" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-indigo-500 transition text-slate-200">
+                <option value="blynk.cloud">blynk.cloud (Auto)</option>
+                <option value="sgp1.blynk.cloud">sgp1.blynk.cloud (Asia)</option>
+                <option value="fra1.blynk.cloud">fra1.blynk.cloud (Eropa)</option>
+                <option value="ny3.blynk.cloud">ny3.blynk.cloud (Amerika)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Mode Operasional</label>
+              <button id="btn-demo-mode" onclick="toggleDemoMode()" class="w-full bg-slate-950 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl py-2 text-xs font-semibold transition text-emerald-400 flex items-center justify-center gap-1.5 h-[38px]">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" id="demo-indicator"></span>
+                Uji Coba Offline
+              </button>
+            </div>
+          </div>
+          
+          <button onclick="saveBlynkSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-xl text-xs transition shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            Simpan Konfigurasi & Hubungkan
+          </button>
+        </div>
+      </div>
+
+      <!-- Dashboard Status Saklar (8 Pins) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-grow flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="power" class="w-5 h-5 text-indigo-400"></i>
+            <h2 class="text-sm font-bold text-slate-100">Status 8 Saklar Pintar</h2>
+          </div>
+          <button onclick="syncAllPins()" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="sync-icon"></i> Sinkronisasi Blynk
+          </button>
+        </div>
+
+        <!-- Daftar 8 Switch Pins dalam Grid Layout -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="switch-container">
+          <!-- V1 sampai V8 di-generate melalui JavaScript -->
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 border border-slate-800 px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 flex items-center gap-3 z-50">
+    <div class="w-8 h-8 rounded-full flex items-center justify-center" id="toast-icon-bg">
+      <i id="toast-icon" class="w-4 h-4 text-white"></i>
+    </div>
+    <div>
+      <p id="toast-message" class="text-xs font-medium text-slate-200"></p>
+    </div>
+  </div>
+
+  <footer class="border-t border-slate-900 bg-slate-950/50 py-3 text-center text-xs text-slate-500 mt-6">
+    <p>&copy; 2026 GestureLink IoT 8-Switch. Dikembangkan dengan MediaPipe & Blynk API.</p>
+  </footer>
+
+  <script>
+    // Inisialisasi Ikon Lucide
+    lucide.createIcons();
+
+    // DOM Elements
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const detectedNumber = document.getElementById('detected-number');
+    const detectedStatus = document.getElementById('detected-status');
+    const triggerProgressBar = document.getElementById('trigger-progress');
+    const logTerminal = document.getElementById('log-terminal');
+    const inputToken = document.getElementById('blynk-token');
+    const selectRegion = document.getElementById('blynk-region');
+    const demoIndicator = document.getElementById('demo-indicator');
+    const btnDemoMode = document.getElementById('btn-demo-mode');
+    const demoBadge = document.getElementById('demo-badge');
+    const switchContainer = document.getElementById('switch-container');
+
+    // Konfigurasi State Aplikasi
+    let config = {
+      blynkToken: '',
+      region: 'blynk.cloud',
+      demoMode: true
+    };
+
+    // State Pin Blynk lokal (V1 sampai V8)
+    let pinStates = {
+      1: 0, 2: 0, 3: 0, 4: 0,
+      5: 0, 6: 0, 7: 0, 8: 0
+    };
+
+    // Dynamic UI Generation untuk 8 Saklar
+    function generateSwitchCards() {
+      switchContainer.innerHTML = '';
+      for (let i = 1; i <= 8; i++) {
+        switchContainer.innerHTML += `
+          <div id="card-v${i}" class="bg-slate-950 border border-slate-800/85 rounded-xl p-3 flex justify-between items-center gap-3 transition hover:border-indigo-500/30">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">V${i}</div>
+              <div>
+                <h3 class="text-xs font-bold text-slate-200">Saklar V${i}</h3>
+                <p class="text-[9px] text-slate-500">${i} Jari Terbuka</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="badge-v${i}" class="text-[9px] px-2 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800 font-bold uppercase">OFF</span>
+              <button onclick="togglePinDirectly(${i})" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition">
+                <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    // Setup Gesture Hold State
+    let currentStableGesture = 0;
+    let gestureTimer = null;
+    const holdDurationNeeded = 1500; // 1.5 detik
+    let lastActionTime = 0;
+    const cooldownDuration = 2500; // Jeda 2.5 detik
+
+    // Memuat preferensi pengguna yang tersimpan sebelumnya
+    function loadSavedSettings() {
+      const savedToken = localStorage.getItem('blynk_token_8ch');
+      const savedRegion = localStorage.getItem('blynk_region_8ch');
+      const savedDemo = localStorage.getItem('blynk_demo_8ch');
+
+      if (savedToken) {
+        config.blynkToken = savedToken;
+        inputToken.value = savedToken;
+      }
+      if (savedRegion) {
+        config.region = savedRegion;
+        selectRegion.value = savedRegion;
+      }
+      if (savedDemo !== null) {
+        config.demoMode = savedDemo === 'true';
+      }
+      updateDemoUI();
+    }
+
+    function toggleDemoMode() {
+      config.demoMode = !config.demoMode;
+      localStorage.setItem('blynk_demo_8ch', config.demoMode);
+      updateDemoUI();
+      showToast(
+        config.demoMode ? 'Uji Coba Offline diaktifkan.' : 'Mode Koneksi API Blynk Riil diaktifkan.', 
+        config.demoMode ? 'success' : 'info'
+      );
+    }
+
+    function updateDemoUI() {
+      if (config.demoMode) {
+        demoIndicator.classList.remove('bg-slate-500');
+        demoIndicator.classList.add('bg-emerald-500');
+        btnDemoMode.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" id="demo-indicator"></span> Uji Coba Offline`;
+        btnDemoMode.className = "w-full bg-slate-950 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl py-2 text-xs font-semibold transition text-emerald-400 flex items-center justify-center gap-1.5 h-[38px]";
+        demoBadge.innerText = "Mode Demo Aktif";
+        demoBadge.className = "px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold";
+        writeLog('Sistem beralih ke Mode Demo Offline. Anda tidak memerlukan API key untuk melihat visualisasi status saklar.');
+      } else {
+        demoIndicator.classList.add('bg-slate-500');
+        demoIndicator.classList.remove('bg-emerald-500');
+        btnDemoMode.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-500" id="demo-indicator"></span> Mode API Blynk`;
+        btnDemoMode.className = "w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl py-2 text-xs font-semibold transition text-slate-400 flex items-center justify-center gap-1.5 h-[38px]";
+        demoBadge.innerText = "Koneksi Cloud";
+        demoBadge.className = "px-2 py-0.5 rounded text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold";
+        writeLog('Sistem beralih menggunakan API Blynk riil. Pastikan Token Blynk sudah diisi dengan benar.');
+      }
+    }
+
+    function toggleTokenVisibility() {
+      const toggleEye = document.getElementById('toggle-eye');
+      if (inputToken.type === 'password') {
+        inputToken.type = 'text';
+        toggleEye.setAttribute('data-lucide', 'eye-off');
+      } else {
+        inputToken.type = 'password';
+        toggleEye.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    function saveBlynkSettings() {
+      const token = inputToken.value.trim();
+      const region = selectRegion.value;
+
+      if (!config.demoMode && !token) {
+        showToast('Masukkan Token Blynk terlebih dahulu atau gunakan Mode Uji Coba Offline!', 'error');
+        return;
+      }
+
+      config.blynkToken = token;
+      config.region = region;
+      
+      localStorage.setItem('blynk_token_8ch', token);
+      localStorage.setItem('blynk_region_8ch', region);
+
+      showToast('Konfigurasi Blynk berhasil disimpan!', 'success');
+      writeLog(`[Sistem] Konfigurasi diperbarui. Server: https://${region}, Token: ${token ? '••••' + token.slice(-5) : 'Belum diisi'}`);
+      
+      if (!config.demoMode) {
+        syncAllPins();
+      }
+    }
+
+    function writeLog(message, isError = false, isSuccess = false) {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      const logDiv = document.createElement('div');
+      
+      if (isError) {
+        logDiv.className = 'text-red-400';
+      } else if (isSuccess) {
+        logDiv.className = 'text-emerald-400';
+      } else {
+        logDiv.className = 'text-slate-300';
+      }
+
+      logDiv.innerHTML = `<span class="text-slate-600">[${timeStr}]</span> ${message}`;
+      logTerminal.appendChild(logDiv);
+      logTerminal.scrollTop = logTerminal.scrollHeight;
+    }
+
+    // Membersihkan log terminal di UI
+    function clearLogs() {
+      logTerminal.innerHTML = '<div class="text-slate-500">[Sistem] Log terminal dibersihkan. Menunggu aktivitas baru...</div>';
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastIcon = document.getElementById('toast-icon');
+      const toastIconBg = document.getElementById('toast-icon-bg');
+      const toastMsg = document.getElementById('toast-message');
+
+      toastMsg.innerText = message;
+
+      if (type === 'success') {
+        toastIconBg.className = 'w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500/10 text-emerald-400';
+        toastIcon.setAttribute('data-lucide', 'check');
+      } else if (type === 'error') {
+        toastIconBg.className = 'w-8 h-8 rounded-full flex items-center justify-center bg-red-500/10 text-red-400';
+        toastIcon.setAttribute('data-lucide', 'x');
+      } else {
+        toastIconBg.className = 'w-8 h-8 rounded-full flex items-center justify-center bg-blue-500/10 text-blue-400';
+        toastIcon.setAttribute('data-lucide', 'info');
+      }
+
+      lucide.createIcons();
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
+    }
+
+    async function syncAllPins() {
+      if (config.demoMode) {
+        writeLog('[Demo] Simulasi sinkronisasi semua pin virtual (V1-V8) berhasil.');
+        return;
+      }
+
+      if (!config.blynkToken) {
+        showToast('Auth Token belum diatur untuk sinkronisasi.', 'error');
+        return;
+      }
+
+      const syncIcon = document.getElementById('sync-icon');
+      syncIcon.classList.add('animate-spin');
+
+      writeLog('[Blynk API] Mencoba sinkronisasi status 8 saklar dari server...');
+
+      for (let pin = 1; pin <= 8; pin++) {
+        try {
+          const response = await fetch(`https://${config.region}/external/api/get?token=${config.blynkToken}&v${pin}`);
+          if (response.ok) {
+            const val = await response.text();
+            const state = parseInt(val.trim()) || 0;
+            pinStates[pin] = state;
+            updatePinUI(pin, state);
+          }
+        } catch (err) {
+          writeLog(`[API Gagal] Gagal mengambil data Virtual Pin V${pin}.`, true);
+        }
+      }
+
+      setTimeout(() => {
+        syncIcon.classList.remove('animate-spin');
+        writeLog('[Blynk API] Sinkronisasi 8 saklar selesai.', false, true);
+      }, 1000);
+    }
+
+    function updatePinUI(pin, state) {
+      const badge = document.getElementById(`badge-v${pin}`);
+      const parentCard = document.getElementById(`card-v${pin}`);
+      if (!badge || !parentCard) return;
+
+      if (state === 1) {
+        badge.innerText = 'ON';
+        badge.className = 'text-[9px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold animate-pulse';
+        parentCard.classList.remove('border-slate-800/85');
+        parentCard.classList.add('border-indigo-500/30', 'bg-indigo-950/10');
+      } else {
+        badge.innerText = 'OFF';
+        badge.className = 'text-[9px] px-2 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800 font-bold';
+        parentCard.classList.remove('border-indigo-500/30', 'bg-indigo-950/10');
+        parentCard.classList.add('border-slate-800/85');
+      }
+    }
+
+    async function setBlynkPinValue(pin, value) {
+      if (config.demoMode) {
+        pinStates[pin] = value;
+        updatePinUI(pin, value);
+        writeLog(`[Demo Mode] Saklar V${pin} berhasil di-toggle menjadi: ${value === 1 ? 'ON' : 'OFF'}`, false, true);
+        showToast(`Saklar V${pin} di-toggle ke ${value === 1 ? 'ON' : 'OFF'} (Demo Mode)`, 'success');
+        return;
+      }
+
+      if (!config.blynkToken) {
+        showToast('Auth Token Blynk belum diisi!', 'error');
+        writeLog('[Kesalahan] Sinyal batal dikirim karena Auth Token Blynk kosong.', true);
+        return;
+      }
+
+      const url = `https://${config.region}/external/api/update?token=${config.blynkToken}&v${pin}=${value}`;
+      writeLog(`[API Request] Mengubah Blynk V${pin} ke ${value}...`);
+
+      try {
+        await fetch(url, { mode: 'cors' }).catch(() => {
+          return fetch(url, { mode: 'no-cors' });
+        });
+
+        pinStates[pin] = value;
+        updatePinUI(pin, value);
+        writeLog(`[API Berhasil] Saklar V${pin} berhasil diubah ke: ${value === 1 ? 'ON' : 'OFF'}`, false, true);
+        showToast(`Saklar V${pin} di-toggle ke ${value === 1 ? 'ON' : 'OFF'}!`, 'success');
+      } catch (error) {
+        writeLog(`[API Error] Gagal mengubah status Saklar V${pin} di Blynk Cloud.`, true);
+        showToast(`Gagal mengontrol Saklar V${pin}.`, 'error');
+      }
+    }
+
+    function togglePinDirectly(pin) {
+      const nextState = pinStates[pin] === 1 ? 0 : 1;
+      setBlynkPinValue(pin, nextState);
+    }
+
+    // MediaPipe Image Processing Loop
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (loadingOverlay.classList.contains('bg-slate-950/85')) {
+        loadingOverlay.classList.add('opacity-0', 'pointer-events-none');
+        loadingOverlay.classList.remove('bg-slate-950/85');
+      }
+
+      let totalFingersCount = 0;
+      let handVisible = false;
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        handVisible = true;
+        
+        // Iterasi melalui semua tangan yang terdeteksi (Hingga maksimal 2 tangan)
+        for (let index = 0; index < results.multiHandLandmarks.length; index++) {
+          const landmarks = results.multiHandLandmarks[index];
+          const handedness = results.multiHandedness[index].label; // "Left" atau "Right"
+
+          // Menggambarkan rangka visualisasi tangan di canvas
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#6366f1', lineWidth: 3});
+          drawLandmarks(canvasCtx, landmarks, {color: '#a855f7', lineWidth: 1.5, radius: 3});
+
+          // Deteksi Landmark Jari
+          const tipIds = [4, 8, 12, 16, 20];
+          let fingers = [];
+
+          // 1. Ibu Jari (Jempol) - Menggunakan perbedaan sumbu X untuk tangan kiri & kanan
+          const isLeftHand = handedness === 'Left';
+          if (isLeftHand) {
+            if (landmarks[tipIds[0]].x > landmarks[tipIds[0] - 1].x) {
+              fingers.push(1);
+            } else {
+              fingers.push(0);
+            }
+          } else {
+            if (landmarks[tipIds[0]].x < landmarks[tipIds[0] - 1].x) {
+              fingers.push(1);
+            } else {
+              fingers.push(0);
+            }
+          }
+
+          // 2. 4 Jari Lainnya (Vertikal Y)
+          for (let i = 1; i < 5; i++) {
+            if (landmarks[tipIds[i]].y < landmarks[tipIds[i] - 2].y) {
+              fingers.push(1);
+            } else {
+              fingers.push(0);
+            }
+          }
+
+          // Tambahkan jumlah jari dari tangan ini ke total akumulasi
+          const handFingersOpen = fingers.reduce((a, b) => a + b, 0);
+          totalFingersCount += handFingersOpen;
+        }
+      }
+
+      // Menyesuaikan penahanan gestur (1-8 Jari)
+      handleGestureTiming(totalFingersCount, handVisible);
+      canvasCtx.restore();
+    }
+
+    function handleGestureTiming(fingersCount, handVisible) {
+      const now = Date.now();
+
+      // Jeda masa cooldown
+      if (now - lastActionTime < cooldownDuration) {
+        detectedNumber.innerText = "⏳";
+        detectedStatus.innerText = "Sistem bersiap menerima isyarat baru...";
+        detectedStatus.className = "text-xs font-bold text-amber-400";
+        triggerProgressBar.style.width = `0%`;
+        currentStableGesture = 0;
+        return;
+      }
+
+      // Batasi isyarat tangan hanya dari rentang 1 sampai 8
+      if (!handVisible || fingersCount === 0 || fingersCount > 8) {
+        detectedNumber.innerText = "-";
+        detectedStatus.innerText = fingersCount > 8 ? "Maksimal 8 jari!" : "Tunjukkan jari Anda (1-8)";
+        detectedStatus.className = fingersCount > 8 ? "text-xs font-bold text-red-400" : "text-xs font-bold text-slate-400";
+        triggerProgressBar.style.width = `0%`;
+        currentStableGesture = 0;
+        return;
+      }
+
+      // Jika jumlah jari stabil
+      if (fingersCount === currentStableGesture) {
+        const timeElapsed = now - gestureTimer;
+        const progressPercent = Math.min((timeElapsed / holdDurationNeeded) * 100, 100);
+        triggerProgressBar.style.width = `${progressPercent}%`;
+
+        detectedNumber.innerText = fingersCount;
+        detectedStatus.innerText = `Menahan isyarat V${fingersCount}... (${Math.round(progressPercent)}%)`;
+        detectedStatus.className = "text-xs font-bold text-indigo-400";
+
+        if (timeElapsed >= holdDurationNeeded) {
+          executeGestureAction(fingersCount);
+        }
+      } else {
+        // Reset timer jika jari berganti posisi
+        currentStableGesture = fingersCount;
+        gestureTimer = now;
+        triggerProgressBar.style.width = `0%`;
+      }
+    }
+
+    function executeGestureAction(fingers) {
+      lastActionTime = Date.now();
+      triggerProgressBar.style.width = `100%`;
+      
+      const targetPin = fingers; // V1 s.d. V8
+      const currentVal = pinStates[targetPin] || 0;
+      const nextVal = currentVal === 1 ? 0 : 1;
+
+      writeLog(`[Gestur Terdeteksi] Stabil menahan ${fingers} jari. Menjalankan toggle V${targetPin}...`);
+      setBlynkPinValue(targetPin, nextVal);
+    }
+
+    // Konfigurasi Inisialisasi MediaPipe Hands
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2, // Mendeteksi dua tangan sekaligus untuk 8 jari
+      modelComplexity: 1,
+      minDetectionConfidence: 0.75,
+      minTrackingConfidence: 0.75
+    });
+
+    hands.onResults(onResults);
+
+    // Setup Kamera
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 640,
+      height: 480
+    });
+
+    function resizeCanvas() {
+      canvasElement.width = canvasElement.parentElement.clientWidth;
+      canvasElement.height = canvasElement.parentElement.clientHeight;
+    }
+
+    window.onload = function() {
+      generateSwitchCards();
+      loadSavedSettings();
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      
+      camera.start().then(() => {
+        writeLog('[Kamera] Webcam berhasil diaktifkan.');
+      }).catch(err => {
+        writeLog('[Gagal] Gagal mengakses kamera. Mohon berikan izin akses kamera.', true);
+        showToast('Akses kamera ditolak!', 'error');
+      });
+    };
+  </script>
+</body>
+</html>
